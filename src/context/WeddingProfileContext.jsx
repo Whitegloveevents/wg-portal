@@ -1,54 +1,27 @@
-﻿import React, { createContext, useContext, useState, useEffect } from "react";
+﻿import React from "react";
+import { useWeddingsData } from "./WeddingsDataContext.jsx";
 
-const STORAGE_KEY = "wg-wedding-profile-v1";
-
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch (e) {
-    return null;
-  }
-}
-
-const DEFAULTS = {
-  coupleNames: "Shrestha & Nishanth",
-  weddingDate: "2026-08-22",
-  venueOverride: "",
-  weddingStatus: "Planning",
-  plannerName: "",
-  plannerPhotoUrl: "",
-  plannerEmail: "",
-  plannerPhone: "",
-  couplePhotoUrl: "",
+const EMPTY_PROFILE = {
+  coupleNames: "", weddingDate: "", venueOverride: "", weddingStatus: "Planning",
+  plannerName: "", plannerPhotoUrl: "", plannerEmail: "", plannerPhone: "",
+  couplePhotoUrl: "", couplePhotoSize: 60,
 };
 
-const WeddingProfileContext = createContext(null);
-
 export function WeddingProfileProvider({ children }) {
-  const saved = loadState();
-  const [profile, setProfileState] = useState({ ...DEFAULTS, ...(saved || {}) });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-    } catch (e) { /* storage unavailable */ }
-  }, [profile]);
-
-  function updateProfile(fields) {
-    setProfileState((p) => ({ ...p, ...fields }));
-  }
-
-  return (
-    <WeddingProfileContext.Provider value={{ profile, updateProfile }}>
-      {children}
-    </WeddingProfileContext.Provider>
-  );
+  return children;
 }
 
 export function useWeddingProfile() {
-  const ctx = useContext(WeddingProfileContext);
-  if (!ctx) throw new Error("useWeddingProfile must be used inside WeddingProfileProvider");
-  return ctx;
+  const { weddings, currentWeddingId, updateWeddingFields } = useWeddingsData();
+  const current = weddings.find((w) => w.id === currentWeddingId) || weddings[0] || null;
+
+  if (!current) {
+    return { profile: EMPTY_PROFILE, updateProfile: () => {} };
+  }
+
+  function updateProfile(fields) {
+    updateWeddingFields(current.id, fields);
+  }
+
+  return { profile: current, updateProfile };
 }

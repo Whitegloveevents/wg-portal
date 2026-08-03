@@ -1,18 +1,5 @@
-﻿import React, { createContext, useContext, useState, useEffect } from "react";
-
-const STORAGE_KEY = "wg-budget-data-v1";
-
-function uid() { return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
-
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch (e) {
-    return null;
-  }
-}
+﻿import React from "react";
+import { useWeddingsData, uid } from "./WeddingsDataContext.jsx";
 
 export function makePayment() {
   return { id: uid(), name: "", amount: "", dueDate: "", status: "Pending", paidDate: "", method: "", reference: "", receiptName: "", receiptUrl: "", notes: "" };
@@ -25,45 +12,49 @@ export function makeItem(overrides = {}) {
   };
 }
 
-const BudgetDataContext = createContext(null);
-
 export function BudgetDataProvider({ children }) {
-  const saved = loadState();
-  const [vendors, setVendors] = useState(saved?.vendors || []);
-  const [rentals, setRentals] = useState(saved?.rentals || []);
-  const [misc, setMisc] = useState(saved?.misc || []);
-  const [initialOverallBudget, setInitialOverallBudget] = useState(saved?.initialOverallBudget || 0);
-  const [categoryBudgets, setCategoryBudgets] = useState(saved?.categoryBudgets || []);
-  const [savingsLog, setSavingsLog] = useState(saved?.savingsLog || []);
-  const [timelineGeniusLink, setTimelineGeniusLink] = useState(saved?.timelineGeniusLink || "");
-
-  useEffect(() => {
-    const data = { vendors, rentals, misc, initialOverallBudget, categoryBudgets, savingsLog, timelineGeniusLink };
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch (e) { /* storage unavailable */ }
-  }, [vendors, rentals, misc, initialOverallBudget, categoryBudgets, savingsLog, timelineGeniusLink]);
-
-  function bookVendorToBudget({ category, vendorName, contractAmount, notes, attachments }) {
-    const item = makeItem({ category: category || "", vendor: vendorName || "", contractAmount: contractAmount || "", notes: notes || "", attachments: attachments || [] });
-    setVendors((v) => [...v, item]);
-    return item.id;
-  }
-
-  const value = {
-    vendors, setVendors, rentals, setRentals, misc, setMisc,
-    initialOverallBudget, setInitialOverallBudget,
-    categoryBudgets, setCategoryBudgets,
-    savingsLog, setSavingsLog,
-    timelineGeniusLink, setTimelineGeniusLink,
-    bookVendorToBudget,
-  };
-
-  return <BudgetDataContext.Provider value={value}>{children}</BudgetDataContext.Provider>;
+  return children;
 }
 
 export function useBudgetData() {
-  const ctx = useContext(BudgetDataContext);
-  if (!ctx) throw new Error("useBudgetData must be used inside BudgetDataProvider");
-  return ctx;
+  const { weddings, currentWeddingId, updateWeddingField } = useWeddingsData();
+  const current = weddings.find((w) => w.id === currentWeddingId) || weddings[0] || null;
+
+  if (!current) {
+    const noop = () => {};
+    return {
+      vendors: [], setVendors: noop, rentals: [], setRentals: noop, misc: [], setMisc: noop,
+      initialOverallBudget: 0, setInitialOverallBudget: noop,
+      categoryBudgets: [], setCategoryBudgets: noop,
+      savingsLog: [], setSavingsLog: noop,
+      timelineGeniusLink: "", setTimelineGeniusLink: noop,
+      bookVendorToBudget: noop,
+    };
+  }
+
+  const id = current.id;
+  const setVendors = (v) => updateWeddingField(id, "vendors", v);
+  const setRentals = (v) => updateWeddingField(id, "rentals", v);
+  const setMisc = (v) => updateWeddingField(id, "misc", v);
+  const setInitialOverallBudget = (v) => updateWeddingField(id, "initialOverallBudget", v);
+  const setCategoryBudgets = (v) => updateWeddingField(id, "categoryBudgets", v);
+  const setSavingsLog = (v) => updateWeddingField(id, "savingsLog", v);
+  const setTimelineGeniusLink = (v) => updateWeddingField(id, "timelineGeniusLink", v);
+
+  function bookVendorToBudget({ category, vendorName, contractAmount, notes, attachments }) {
+    const item = makeItem({ category: category || "", vendor: vendorName || "", contractAmount: contractAmount || "", notes: notes || "", attachments: attachments || [] });
+    setVendors((v) => [...(v || []), item]);
+    return item.id;
+  }
+
+  return {
+    vendors: current.vendors || [], setVendors,
+    rentals: current.rentals || [], setRentals,
+    misc: current.misc || [], setMisc,
+    initialOverallBudget: current.initialOverallBudget || 0, setInitialOverallBudget,
+    categoryBudgets: current.categoryBudgets || [], setCategoryBudgets,
+    savingsLog: current.savingsLog || [], setSavingsLog,
+    timelineGeniusLink: current.timelineGeniusLink || "", setTimelineGeniusLink,
+    bookVendorToBudget,
+  };
 }

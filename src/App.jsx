@@ -2,9 +2,10 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { BudgetDataProvider } from "./context/BudgetDataContext.jsx";
 import { WeddingProfileProvider } from "./context/WeddingProfileContext.jsx";
+import { WeddingsDataProvider } from "./context/WeddingsDataContext.jsx";
 import ClientPortalLayout from "./components/ClientPortalLayout.jsx";
 
-import Dashboard from "./pages/client/dashboard.jsx";
+import Dashboard from "./pages/client/Dashboard.jsx";
 import Budget from "./pages/client/Budget.jsx";
 import Vendors from "./pages/client/Vendors.jsx";
 import Timeline from "./pages/client/Timeline.jsx";
@@ -20,14 +21,12 @@ import VendorLibrary from "./pages/admin/VendorLibrary.jsx";
 
 import ComingSoon from "./components/ComingSoon.jsx";
 
-// Client Portal nav items that don't have a real page yet.
 const CLIENT_STUBS = [
   { path: "payments", label: "Payments" },
   { path: "seating", label: "Seating" },
   { path: "design", label: "Design" },
 ];
 
-// Admin Portal nav items that don't have a real page yet.
 const ADMIN_STUBS = [
   { path: "calendar", label: "Calendar" },
   { path: "tasks", label: "Tasks" },
@@ -39,15 +38,12 @@ const ADMIN_STUBS = [
 
 export default function App() {
   return (
+    <WeddingsDataProvider>
     <BudgetDataProvider>
     <WeddingProfileProvider>
     <Routes>
-      {/* Root — send people straight into the client portal */}
       <Route path="/" element={<Navigate to="/portal/dashboard" replace />} />
 
-      {/* Client Portal — single wedding (Shrestha & Nishanth). Nested under
-          ClientPortalLayout so the persistent header appears above every one
-          of these pages without touching each page file individually. */}
       <Route element={<ClientPortalLayout />}>
         <Route path="/portal/dashboard" element={<Dashboard />} />
         <Route path="/portal/budget" element={<Budget />} />
@@ -63,8 +59,6 @@ export default function App() {
         ))}
       </Route>
 
-      {/* Planner Admin Portal — studio-wide, manages all weddings. Not
-          wrapped in the client header — this is the planner's own view. */}
       <Route path="/admin" element={<Navigate to="/admin/weddings" replace />} />
       <Route path="/admin/dashboard" element={<AdminDashboard />} />
       <Route path="/admin/weddings" element={<AllWeddings />} />
@@ -73,10 +67,10 @@ export default function App() {
         <Route key={s.path} path={`/admin/${s.path}`} element={<ComingSoon label={s.label} backTo="/admin/dashboard" />} />
       ))}
 
-      {/* Fallback */}
       <Route path="*" element={<Navigate to="/portal/dashboard" replace />} />
     </Routes>
     </WeddingProfileProvider>
     </BudgetDataProvider>
+    </WeddingsDataProvider>
   );
 }
