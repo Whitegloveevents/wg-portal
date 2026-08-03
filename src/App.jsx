@@ -4,7 +4,7 @@ import { BudgetDataProvider } from "./context/BudgetDataContext.jsx";
 import { WeddingProfileProvider } from "./context/WeddingProfileContext.jsx";
 import ClientPortalLayout from "./components/ClientPortalLayout.jsx";
 
-import Dashboard from "./pages/client/Dashboard.jsx";
+import Dashboard from "./pages/client/dashboard.jsx";
 import Budget from "./pages/client/Budget.jsx";
 import Vendors from "./pages/client/Vendors.jsx";
 import Timeline from "./pages/client/Timeline.jsx";
