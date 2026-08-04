@@ -4,7 +4,6 @@ import { BudgetDataProvider } from "./context/BudgetDataContext.jsx";
 import { WeddingProfileProvider } from "./context/WeddingProfileContext.jsx";
 import { WeddingsDataProvider } from "./context/WeddingsDataContext.jsx";
 import ClientPortalLayout from "./components/ClientPortalLayout.jsx";
-
 import Dashboard from "./pages/client/Dashboard.jsx";
 import Budget from "./pages/client/Budget.jsx";
 import Vendors from "./pages/client/Vendors.jsx";
@@ -42,7 +41,7 @@ export default function App() {
     <BudgetDataProvider>
     <WeddingProfileProvider>
     <Routes>
-      <Route path="/" element={<Navigate to="/portal/dashboard" replace />} />
+<Route path="/" element={<Navigate to="/admin/weddings" replace />} />
 
       <Route element={<ClientPortalLayout />}>
         <Route path="/portal/dashboard" element={<Dashboard />} />
