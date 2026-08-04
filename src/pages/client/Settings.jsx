@@ -1,4 +1,5 @@
 ﻿import React, { useState } from "react";
+import PhotoCropModal from "../../components/PhotoCropModal.jsx";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useBudgetData } from "../../context/BudgetDataContext.jsx";
 import { useWeddingProfile } from "../../context/WeddingProfileContext.jsx";
@@ -108,6 +109,8 @@ export default function SettingsPage() {
   const [weddingSwitcherOpen, setWeddingSwitcherOpen] = useState(false);
 
   const [section, setSection] = useState("profile");
+  const [cropModalSrc, setCropModalSrc] = useState(null);
+  const [cropModalInitial, setCropModalInitial] = useState(null);
   const [savedFlags, setSavedFlags] = useState({});
 
   const [profile, setProfile] = useState({ email: "", phone: "" });
@@ -340,15 +343,27 @@ export default function SettingsPage() {
                             const file = e.target.files?.[0];
                             if (!file) return;
                             try {
-                              const small = await resizeImageFile(file);
-                              updateProfile({ couplePhotoUrl: small });
+                              const original = await resizeImageFile(file, 800, 0.88);
+                              setCropModalInitial(null);
+                              setCropModalSrc(original);
                             } catch (err) {
-                              alert("That photo couldn't be saved — try a different image.");
+                              alert("That photo couldn't be saved - try a different image.");
                             }
                           }} />
                         </label>
+                        {weddingProfile.couplePhotoUrl && weddingProfile.couplePhotoOriginalUrl && (
+                          <button
+                            className="wg-secondary-btn"
+                            onClick={() => {
+                              setCropModalInitial(weddingProfile.couplePhotoCrop);
+                              setCropModalSrc(weddingProfile.couplePhotoOriginalUrl);
+                            }}
+                          >
+                            Reposition Photo
+                          </button>
+                        )}
                         {weddingProfile.couplePhotoUrl && (
-                          <button className="wg-danger-btn" onClick={() => updateProfile({ couplePhotoUrl: "" })}>Remove Photo</button>
+                          <button className="wg-danger-btn" onClick={() => updateProfile({ couplePhotoUrl: "", couplePhotoOriginalUrl: "", couplePhotoCrop: null })}>Remove Photo</button>
                         )}
                       </div>
                       <div>
@@ -396,7 +411,7 @@ export default function SettingsPage() {
                             const small = await resizeImageFile(file);
                             updateProfile({ plannerPhotoUrl: small });
                           } catch (err) {
-                            alert("That photo couldn't be saved — try a different image.");
+                            alert("That photo couldn't be saved - try a different image.");
                           }
                         }} />
                       </label>
@@ -406,7 +421,7 @@ export default function SettingsPage() {
                   <div className="wg-field"><label>Timeline Genius Link <span style={{ fontWeight: 400, textTransform: "none" }}>(planner-managed)</span></label><input placeholder="Paste your private Timeline Genius URL" value={timelineGeniusLink} onChange={(e) => setTimelineGeniusLink(e.target.value)} /></div>
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "#F4EDE0", borderRadius: 8, padding: "10px 12px", marginBottom: 14, maxWidth: 420 }}>
                     <AlertTriangle size={14} color="#B58A4A" style={{ marginTop: 1, flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, color: "#8A8577" }}>Changing the date here won't update countdowns elsewhere yet — that field isn't on the shared data layer. The Timeline Genius link above is shared and live: save it here, and it's what opens when anyone clicks "Timeline" anywhere in the portal.</span>
+                    <span style={{ fontSize: 11, color: "#8A8577" }}>Changing the date here won't update countdowns elsewhere yet - that field isn't on the shared data layer. The Timeline Genius link above is shared and live: save it here, and it's what opens when anyone clicks "Timeline" anywhere in the portal.</span>
                   </div>
                   <button className="wg-primary-btn" onClick={() => markSaved("preferences")}>Save Preferences</button>
                   <SavedBadge show={savedFlags.preferences} />
@@ -466,7 +481,7 @@ export default function SettingsPage() {
                   </div>
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "#F4EDE0", borderRadius: 8, padding: "10px 12px", marginTop: 16, maxWidth: 440 }}>
                     <AlertTriangle size={14} color="#B58A4A" style={{ marginTop: 1, flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, color: "#8A8577" }}>This theme choice applies to this page's sidebar only right now — each page manages its own theme state until the portal shares one backend.</span>
+                    <span style={{ fontSize: 11, color: "#8A8577" }}>This theme choice applies to this page's sidebar only right now - each page manages its own theme state until the portal shares one backend.</span>
                   </div>
                 </div>
               )}
@@ -482,7 +497,7 @@ export default function SettingsPage() {
                   <button className="wg-primary-btn" onClick={savePassword}>Update Password</button>
                   <SavedBadge show={savedFlags.account} />
                   <div style={{ fontSize: 11, color: "#8A8577", marginTop: 12, maxWidth: 420 }}>
-                    Note: there's no real authentication backend behind this yet — this form validates and clears locally but doesn't actually change a login anywhere.
+                    Note: there's no real authentication backend behind this yet - this form validates and clears locally but doesn't actually change a login anywhere.
                   </div>
                 </div>
               )}
@@ -545,6 +560,22 @@ export default function SettingsPage() {
 
         </div>
       </main>
+
+      {cropModalSrc && (
+        <PhotoCropModal
+          imageSrc={cropModalSrc}
+          initialCrop={cropModalInitial}
+          onClose={() => setCropModalSrc(null)}
+          onSave={(croppedDataUrl, cropSettings) => {
+            updateProfile({
+              couplePhotoUrl: croppedDataUrl,
+              couplePhotoOriginalUrl: cropModalSrc,
+              couplePhotoCrop: cropSettings,
+            });
+            setCropModalSrc(null);
+          }}
+        />
+      )}
     </div>
   );
 }
