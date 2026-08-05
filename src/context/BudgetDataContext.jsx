@@ -1,60 +1,116 @@
-﻿import React from "react";
-import { useWeddingsData, uid } from "./WeddingsDataContext.jsx";
+﻿import React, { createContext, useContext, useState, useEffect } from "react";
 
-export function makePayment() {
-  return { id: uid(), name: "", amount: "", dueDate: "", status: "Pending", paidDate: "", method: "", reference: "", receiptName: "", receiptUrl: "", notes: "" };
+const STORAGE_KEY = "wg-weddings-data-v1";
+const OLD_PROFILE_KEY = "wg-wedding-profile-v1";
+const OLD_BUDGET_KEY = "wg-budget-data-v1";
+
+export function uid() { return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
+
+const PROFILE_DEFAULTS = {
+  coupleNames: "",
+  weddingDate: "",
+  venueOverride: "",
+  weddingStatus: "Planning",
+  plannerName: "",
+  plannerPhotoUrl: "",
+  plannerEmail: "",
+  plannerPhone: "",
+  couplePhotoUrl: "",
+  couplePhotoSize: 60,
+  couplePhotoOriginalUrl: "",
+  couplePhotoCrop: null,
+  coupleLoginEmail: "",
+};
+const BUDGET_DEFAULTS = {
+  vendors: [], rentals: [], misc: [],
+  initialOverallBudget: 0, categoryBudgets: [], savingsLog: [], timelineGeniusLink: "",
+};
+
+function makeWeddingRecord(overrides = {}) {
+  return { id: uid(), archived: false, ...PROFILE_DEFAULTS, ...BUDGET_DEFAULTS, ...overrides };
 }
-export function makeItem(overrides = {}) {
-  return {
-    id: uid(), category: "", vendor: "", initialBudget: "", contractAmount: "",
-    payments: [], whoIsPaying: "", bridePct: "50", groomPct: "50", notes: "", attachments: [],
-    ...overrides,
-  };
+
+function migrateFromOldStorage() {
+  try {
+    const oldProfileRaw = localStorage.getItem(OLD_PROFILE_KEY);
+    const oldBudgetRaw = localStorage.getItem(OLD_BUDGET_KEY);
+    if (!oldProfileRaw && !oldBudgetRaw) return null;
+    const oldProfile = oldProfileRaw ? JSON.parse(oldProfileRaw) : {};
+    const oldBudget = oldBudgetRaw ? JSON.parse(oldBudgetRaw) : {};
+    return makeWeddingRecord({ ...oldProfile, ...oldBudget });
+  } catch (e) {
+    return null;
+  }
 }
 
-export function BudgetDataProvider({ children }) {
-  return children;
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* fall through to migration/seed */ }
+
+  const migrated = migrateFromOldStorage();
+  if (migrated) {
+    return { weddings: [migrated], currentWeddingId: migrated.id };
+  }
+  return null;
 }
 
-export function useBudgetData() {
-  const { weddings, currentWeddingId, updateWeddingField } = useWeddingsData();
-  const current = weddings.find((w) => w.id === currentWeddingId) || weddings[0] || null;
+const WeddingsDataContext = createContext(null);
 
-  if (!current) {
-    const noop = () => {};
-    return {
-      vendors: [], setVendors: noop, rentals: [], setRentals: noop, misc: [], setMisc: noop,
-      initialOverallBudget: 0, setInitialOverallBudget: noop,
-      categoryBudgets: [], setCategoryBudgets: noop,
-      savingsLog: [], setSavingsLog: noop,
-      timelineGeniusLink: "", setTimelineGeniusLink: noop,
-      bookVendorToBudget: noop,
-    };
+export function WeddingsDataProvider({ children }) {
+  const saved = loadState();
+  const [weddings, setWeddings] = useState(saved?.weddings || []);
+  const [currentWeddingId, setCurrentWeddingId] = useState(saved?.currentWeddingId || saved?.weddings?.[0]?.id || null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ weddings, currentWeddingId }));
+    } catch (e) { /* storage unavailable */ }
+  }, [weddings, currentWeddingId]);
+
+  function updateWeddingField(weddingId, field, valueOrUpdater) {
+    setWeddings((prev) => prev.map((w) => {
+      if (w.id !== weddingId) return w;
+      const newValue = typeof valueOrUpdater === "function" ? valueOrUpdater(w[field]) : valueOrUpdater;
+      return { ...w, [field]: newValue };
+    }));
   }
 
-  const id = current.id;
-  const setVendors = (v) => updateWeddingField(id, "vendors", v);
-  const setRentals = (v) => updateWeddingField(id, "rentals", v);
-  const setMisc = (v) => updateWeddingField(id, "misc", v);
-  const setInitialOverallBudget = (v) => updateWeddingField(id, "initialOverallBudget", v);
-  const setCategoryBudgets = (v) => updateWeddingField(id, "categoryBudgets", v);
-  const setSavingsLog = (v) => updateWeddingField(id, "savingsLog", v);
-  const setTimelineGeniusLink = (v) => updateWeddingField(id, "timelineGeniusLink", v);
-
-  function bookVendorToBudget({ category, vendorName, contractAmount, notes, attachments }) {
-    const item = makeItem({ category: category || "", vendor: vendorName || "", contractAmount: contractAmount || "", notes: notes || "", attachments: attachments || [] });
-    setVendors((v) => [...(v || []), item]);
-    return item.id;
+  function updateWeddingFields(weddingId, fields) {
+    setWeddings((prev) => prev.map((w) => (w.id === weddingId ? { ...w, ...fields } : w)));
   }
 
-  return {
-    vendors: current.vendors || [], setVendors,
-    rentals: current.rentals || [], setRentals,
-    misc: current.misc || [], setMisc,
-    initialOverallBudget: current.initialOverallBudget || 0, setInitialOverallBudget,
-    categoryBudgets: current.categoryBudgets || [], setCategoryBudgets,
-    savingsLog: current.savingsLog || [], setSavingsLog,
-    timelineGeniusLink: current.timelineGeniusLink || "", setTimelineGeniusLink,
-    bookVendorToBudget,
+  function addWedding(fields = {}) {
+    const record = makeWeddingRecord(fields);
+    setWeddings((prev) => [...prev, record]);
+    return record.id;
+  }
+  function deleteWedding(weddingId) {
+    setWeddings((prev) => prev.filter((w) => w.id !== weddingId));
+    if (currentWeddingId === weddingId) {
+      setCurrentWeddingId((id) => {
+        const remaining = weddings.filter((w) => w.id !== weddingId);
+        return remaining[0]?.id || null;
+      });
+    }
+  }
+  function archiveWedding(weddingId, archived = true) {
+    updateWeddingField(weddingId, "archived", archived);
+  }
+
+  const value = {
+    weddings, setWeddings,
+    currentWeddingId, setCurrentWeddingId,
+    updateWeddingField, updateWeddingFields,
+    addWedding, deleteWedding, archiveWedding,
   };
+
+  return <WeddingsDataContext.Provider value={value}>{children}</WeddingsDataContext.Provider>;
+}
+
+export function useWeddingsData() {
+  const ctx = useContext(WeddingsDataContext);
+  if (!ctx) throw new Error("useWeddingsData must be used inside WeddingsDataProvider");
+  return ctx;
 }

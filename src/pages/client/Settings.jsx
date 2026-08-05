@@ -118,9 +118,10 @@ export default function SettingsPage() {
   const [prefs, setPrefs] = useState({ weddingType: "Not specified", guestEstimate: "" });
   const { timelineGeniusLink, setTimelineGeniusLink } = useBudgetData();
   const [notif, setNotif] = useState({ email: true, sms: false, payments: true, meetings: true, vendorUpdates: true });
-  const [account, setAccount] = useState({ loginEmail: "", newPassword: "", confirmPassword: "" });
+  const [account, setAccount] = useState({ newPassword: "", confirmPassword: "" });
   const [passwordError, setPasswordError] = useState("");
   const [privacy, setPrivacy] = useState({ shareGuestListWithVendors: false, allowPlannerPhotoSharing: true });
+  const [exportNotice, setExportNotice] = useState("");
   const [accent, setAccent] = useState("champagne");
   const [defaultSidebarView, setDefaultSidebarView] = useState("feature");
 
@@ -130,6 +131,36 @@ export default function SettingsPage() {
   function markSaved(key) {
     setSavedFlags((f) => ({ ...f, [key]: true }));
     setTimeout(() => setSavedFlags((f) => ({ ...f, [key]: false })), 2000);
+  }
+
+  function handleDataExport() {
+    const dataStr = JSON.stringify(weddingProfile, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeName = (weddingProfile.coupleNames || "wedding").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase();
+    link.href = url;
+    link.download = `${safeName}-data-export.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setExportNotice("Downloaded. Check your Downloads folder.");
+    setTimeout(() => setExportNotice(""), 4000);
+  }
+
+  function handleAccountDeletionRequest() {
+    const subject = encodeURIComponent(`Account Deletion Request - ${weddingProfile.coupleNames || "Wedding"}`);
+    const body = encodeURIComponent(
+      `Hi,\n\nI'm requesting that my wedding portal account and data be deleted.\n\nCouple: ${weddingProfile.coupleNames || ""}\nWedding Date: ${weddingProfile.weddingDate || ""}\n\nThank you.`
+    );
+    const to = weddingProfile.plannerEmail || "";
+    if (!to) {
+      setExportNotice("No planner email is on file yet — please reach out via the Contacts page instead.");
+      setTimeout(() => setExportNotice(""), 5000);
+      return;
+    }
+    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
   }
   function savePassword() {
     setPasswordError("");
@@ -490,9 +521,9 @@ export default function SettingsPage() {
                 <div className="wg-card">
                   <div className="wg-section-title">Account</div>
                   <div className="wg-section-sub">Manage your login and password.</div>
-                  <div className="wg-field"><label>Login Email</label><input placeholder="Not added yet" value={account.loginEmail} onChange={(e) => setAccount({ ...account, loginEmail: e.target.value })} /></div>
-                  <div className="wg-field"><label>New Password</label><input type="password" value={account.newPassword} onChange={(e) => setAccount({ ...account, newPassword: e.target.value })} /></div>
-                  <div className="wg-field"><label>Confirm New Password</label><input type="password" value={account.confirmPassword} onChange={(e) => setAccount({ ...account, confirmPassword: e.target.value })} /></div>
+                  <div className="wg-field"><label>Login Email <span style={{ fontWeight: 400, textTransform: "none" }}>(saved, but doesn't power a real login yet)</span></label><input autoComplete="off" name="wg-couple-email" placeholder="Not added yet" value={weddingProfile.coupleLoginEmail} onChange={(e) => updateProfile({ coupleLoginEmail: e.target.value })} /></div>
+                  <div className="wg-field"><label>New Password</label><input autoComplete="new-password" name="wg-new-password" type="password" value={account.newPassword} onChange={(e) => setAccount({ ...account, newPassword: e.target.value })} /></div>
+                  <div className="wg-field"><label>Confirm New Password</label><input autoComplete="new-password" name="wg-confirm-password" type="password" value={account.confirmPassword} onChange={(e) => setAccount({ ...account, confirmPassword: e.target.value })} /></div>
                   {passwordError && <div style={{ fontSize: 11.5, color: "#6B2A3A", marginBottom: 10 }}>{passwordError}</div>}
                   <button className="wg-primary-btn" onClick={savePassword}>Update Password</button>
                   <SavedBadge show={savedFlags.account} />
@@ -518,9 +549,10 @@ export default function SettingsPage() {
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#1D1E1A", marginBottom: 4 }}>Data</div>
                     <div style={{ fontSize: 11.5, color: "#8A8577", marginBottom: 12 }}>Request a copy of your data, or ask to have it removed.</div>
                     <div style={{ display: "flex", gap: 10 }}>
-                      <button className="wg-danger-btn">Request Data Export</button>
-                      <button className="wg-danger-btn">Request Account Deletion</button>
+                      <button className="wg-danger-btn" onClick={handleDataExport}>Request Data Export</button>
+                      <button className="wg-danger-btn" onClick={handleAccountDeletionRequest}>Request Account Deletion</button>
                     </div>
+                    {exportNotice && <div style={{ fontSize: 11, color: "#5F7A5A", marginTop: 8 }}>{exportNotice}</div>}
                   </div>
                 </div>
               )}
