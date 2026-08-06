@@ -2,7 +2,8 @@ import React, { useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Home, Wallet, Users, CalendarClock, NotebookPen, ClipboardList,
-  FolderOpen, PhoneCall, Settings, Plus, X, Trash2, Check, ArrowLeft, Mail, Phone, FileText,
+  FolderOpen, PhoneCall, Settings, Plus, X, Trash2, Check, ArrowLeft, Mail, Phone,
+  ChevronDown, ChevronRight, Pencil,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { useBudgetData } from "../../context/BudgetDataContext.jsx";
@@ -52,19 +53,47 @@ function statusOf(item) {
   if (remainingOf(item) === 0) return { label: "Fully Paid", color: SAGE, dot: SAGE };
   return { label: "Partial Payment", color: GOLD, dot: GOLD };
 }
+function lineTotal(l) {
+  const price = l.actualPrice !== "" && l.actualPrice != null ? l.actualPrice : l.estPrice;
+  return (Number(l.quantity) || 0) * (Number(price) || 0);
+}
+function eventTotals(ev) {
+  const subtotal = (ev.items || []).reduce((s, l) => s + lineTotal(l), 0);
+  const tax = subtotal * ((Number(ev.taxPct) || 0) / 100);
+  const service = subtotal * ((Number(ev.servicePct) || 0) / 100);
+  const delivery = Number(ev.deliveryFee) || 0;
+  const discount = Number(ev.discount) || 0;
+  const total = Math.max(0, subtotal + tax + service + delivery - discount);
+  return { subtotal, tax, service, delivery, discount, total };
+}
 
 const PIE_COLORS = [GOLD, SAGE, BORDEAUX, STONE, "#A9BFA2", "#C48A94", "#7E9E93", "#D9C9A3", "#C9BFA8", "#E7D6B8"];
-const CATERING_DEFAULT_EVENTS = ["Mehendi", "Haldi", "Sangeet", "Wedding", "Reception", "Brunch"];
-const DECOR_DEFAULT_ITEMS = ["Ceremony Decor", "Reception Decor", "Cocktail Decor", "Stage", "Mandap", "Florals", "Lighting", "Furniture", "Rentals"];
+const UNIT_OPTIONS = ["Trays", "Pieces", "Plates", "Guests", "Servings", "Hours", "Days", "Sets", "Each", "Photographers", "Albums", "Flat Rate"];
+const CATERING_EVENTS = ["Mehendi", "Haldi", "Sangeet", "Wedding", "Reception", "Other"];
+const DECOR_SECTIONS = ["Mandap", "Stage", "Florals", "Entrance Decor", "Centerpieces", "Lighting", "Furniture", "Rentals"];
+const PAYMENT_STATUSES = [
+  { label: "Upcoming", color: STONE, dot: "#C9BFA8" },
+  { label: "Partial", color: GOLD, dot: GOLD },
+  { label: "Paid", color: SAGE, dot: SAGE },
+  { label: "Overdue", color: BORDEAUX, dot: BORDEAUX },
+];
 
 function isCatering(category) { return (category || "").toLowerCase().includes("cater"); }
 function isDecor(category) { return (category || "").toLowerCase().includes("decor"); }
 
-function SummaryCard({ label, value, accent }) {
+function SummaryCard({ label, value, accent, editable, onChange }) {
   return (
-    <div style={{ flex: 1, minWidth: 160, background: "#FFFFFF", border: `1px solid ${LINE}`, borderRadius: 14, padding: "16px 18px" }}>
-      <div style={{ fontSize: 10, color: STONE, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: accent || INK, fontFamily: "Georgia, serif" }}>{value}</div>
+    <div style={{ flex: 1, minWidth: 140, background: "#FFFFFF", border: `1px solid ${LINE}`, borderRadius: 12, padding: "12px 14px" }}>
+      <div style={{ fontSize: 9.5, color: STONE, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
+      {editable ? (
+        <input
+          type="number" value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ fontSize: 18, fontWeight: 700, color: accent || INK, fontFamily: "Georgia, serif", border: "none", background: "transparent", outline: "none", width: "100%", padding: 0 }}
+        />
+      ) : (
+        <div style={{ fontSize: 18, fontWeight: 700, color: accent || INK, fontFamily: "Georgia, serif" }}>{value}</div>
+      )}
     </div>
   );
 }
@@ -78,135 +107,136 @@ function StatusPill({ status }) {
   );
 }
 
+function EventLineItemsSection({ name, event, onChange, defaultOpen }) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  const items = event.items || [];
+  const totals = eventTotals(event);
+
+  function updateField(field, value) { onChange({ ...event, [field]: value }); }
+  function addItem() {
+    updateField("items", [...items, { id: Date.now(), name: "", quantity: "", unit: "Each", estPrice: "", actualPrice: "", notes: "" }]);
+  }
+  function updateItem(id, field, value) {
+    updateField("items", items.map((l) => (l.id === id ? { ...l, [field]: value } : l)));
+  }
+  function removeItem(id) {
+    updateField("items", items.filter((l) => l.id !== id));
+  }
+
+  return (
+    <div style={{ border: `1px solid ${LINE}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#FBFAF6", border: "none", cursor: "pointer" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 700, color: INK, fontFamily: "Georgia, serif" }}>
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {name}
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: GOLD }}>{currency(totals.total)}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: 14 }}>
+          {items.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 55px 85px 75px 75px 70px 1.2fr 50px", gap: 4, fontSize: 9.5, color: STONE, textTransform: "uppercase", letterSpacing: "0.03em", padding: "0 4px 4px", borderBottom: `1px solid ${LINE}`, marginBottom: 6 }}>
+              <span>Item</span><span>Qty</span><span>Unit</span><span>Est.</span><span>Actual</span><span>Total</span><span>Notes</span><span></span>
+            </div>
+          )}
+          {items.map((l) => (
+            <div key={l.id} style={{ display: "grid", gridTemplateColumns: "1.6fr 55px 85px 75px 75px 70px 1.2fr 50px", gap: 4, alignItems: "center", marginBottom: 4 }}>
+              <input value={l.name} onChange={(e) => updateItem(l.id, "name", e.target.value)} placeholder="Item" style={{ border: `1px solid ${LINE}`, borderRadius: 5, padding: "5px 6px", fontSize: 11.5, width: "100%", boxSizing: "border-box" }} />
+              <input type="number" value={l.quantity} onChange={(e) => updateItem(l.id, "quantity", e.target.value)} style={{ border: `1px solid ${LINE}`, borderRadius: 5, padding: "5px 6px", fontSize: 11.5, width: "100%", boxSizing: "border-box" }} />
+              <select value={l.unit} onChange={(e) => updateItem(l.id, "unit", e.target.value)} style={{ border: `1px solid ${LINE}`, borderRadius: 5, padding: "5px 3px", fontSize: 10.5, width: "100%", boxSizing: "border-box" }}>
+                {UNIT_OPTIONS.map((u) => <option key={u}>{u}</option>)}
+              </select>
+              <input type="number" value={l.estPrice} onChange={(e) => updateItem(l.id, "estPrice", e.target.value)} placeholder="$" style={{ border: `1px solid ${LINE}`, borderRadius: 5, padding: "5px 6px", fontSize: 11.5, width: "100%", boxSizing: "border-box" }} />
+              <input type="number" value={l.actualPrice} onChange={(e) => updateItem(l.id, "actualPrice", e.target.value)} placeholder="$" style={{ border: `1px solid ${LINE}`, borderRadius: 5, padding: "5px 6px", fontSize: 11.5, width: "100%", boxSizing: "border-box" }} />
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: INK, textAlign: "right", paddingRight: 4 }}>{currency(lineTotal(l))}</span>
+              <input value={l.notes} onChange={(e) => updateItem(l.id, "notes", e.target.value)} placeholder="Notes" style={{ border: `1px solid ${LINE}`, borderRadius: 5, padding: "5px 6px", fontSize: 11, width: "100%", boxSizing: "border-box" }} />
+              <div style={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
+                <button onClick={() => removeItem(l.id)} style={{ background: "none", border: "none", color: STONE, cursor: "pointer" }}><Trash2 size={13} /></button>
+              </div>
+            </div>
+          ))}
+          <button onClick={addItem} style={{ display: "flex", alignItems: "center", gap: 5, background: "#FFFFFF", border: `1px solid ${LINE}`, borderRadius: 6, padding: "5px 10px", fontSize: 10.5, fontWeight: 600, color: STONE, cursor: "pointer", marginTop: 6, marginBottom: 10 }}>
+            <Plus size={11} /> Add Item
+          </button>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontSize: 11, borderTop: `1px solid ${LINE}`, paddingTop: 8, alignItems: "center" }}>
+            <span style={{ color: STONE }}>Subtotal: <strong style={{ color: INK }}>{currency(totals.subtotal)}</strong></span>
+            <span style={{ color: STONE, display: "flex", alignItems: "center", gap: 4 }}>Tax %: <input type="number" value={event.taxPct} onChange={(e) => updateField("taxPct", e.target.value)} style={{ width: 42, border: `1px solid ${LINE}`, borderRadius: 4, padding: "2px 4px" }} /></span>
+            <span style={{ color: STONE, display: "flex", alignItems: "center", gap: 4 }}>Service %: <input type="number" value={event.servicePct} onChange={(e) => updateField("servicePct", e.target.value)} style={{ width: 42, border: `1px solid ${LINE}`, borderRadius: 4, padding: "2px 4px" }} /></span>
+            <span style={{ color: STONE, display: "flex", alignItems: "center", gap: 4 }}>Delivery: <input type="number" value={event.deliveryFee} onChange={(e) => updateField("deliveryFee", e.target.value)} style={{ width: 55, border: `1px solid ${LINE}`, borderRadius: 4, padding: "2px 4px" }} /></span>
+            <span style={{ color: STONE, display: "flex", alignItems: "center", gap: 4 }}>Discount: <input type="number" value={event.discount} onChange={(e) => updateField("discount", e.target.value)} style={{ width: 55, border: `1px solid ${LINE}`, borderRadius: 4, padding: "2px 4px" }} /></span>
+            <span style={{ color: SAGE, fontWeight: 700, marginLeft: "auto" }}>Event Total: {currency(totals.total)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CateringSection({ item, onUpdate }) {
   const events = item.cateringEvents && item.cateringEvents.length > 0
     ? item.cateringEvents
-    : CATERING_DEFAULT_EVENTS.map((name) => ({ id: `${Date.now()}-${name}`, name, items: [], taxPct: 0, servicePct: 0 }));
+    : CATERING_EVENTS.map((name) => ({ id: `${Date.now()}-${name}`, name, items: [], taxPct: 0, servicePct: 0, deliveryFee: 0, discount: 0 }));
 
   React.useEffect(() => {
     if (!item.cateringEvents || item.cateringEvents.length === 0) onUpdate(item.id, "cateringEvents", events);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function updateEvent(eventId, field, value) {
-    onUpdate(item.id, "cateringEvents", events.map((e) => (e.id === eventId ? { ...e, [field]: value } : e)));
+  function updateEvent(eventId, newEvent) {
+    onUpdate(item.id, "cateringEvents", events.map((e) => (e.id === eventId ? newEvent : e)));
   }
-  function addMenuItem(eventId) {
-    const ev = events.find((e) => e.id === eventId);
-    updateEvent(eventId, "items", [...(ev.items || []), { id: Date.now(), name: "", quantity: "", pricePerPerson: "" }]);
-  }
-  function updateMenuItem(eventId, lineId, field, value) {
-    const ev = events.find((e) => e.id === eventId);
-    updateEvent(eventId, "items", ev.items.map((l) => (l.id === lineId ? { ...l, [field]: value } : l)));
-  }
-  function removeMenuItem(eventId, lineId) {
-    const ev = events.find((e) => e.id === eventId);
-    updateEvent(eventId, "items", ev.items.filter((l) => l.id !== lineId));
-  }
+  const grandTotal = events.reduce((s, ev) => s + eventTotals(ev).total, 0);
 
   return (
     <div>
-      {events.map((ev) => {
-        const subtotal = (ev.items || []).reduce((s, l) => s + (Number(l.quantity) || 0) * (Number(l.pricePerPerson) || 0), 0);
-        const tax = subtotal * ((Number(ev.taxPct) || 0) / 100);
-        const service = subtotal * ((Number(ev.servicePct) || 0) / 100);
-        const final = subtotal + tax + service;
-        return (
-          <div key={ev.id} style={{ marginBottom: 20, border: `1px solid ${LINE}`, borderRadius: 12, padding: 16 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: INK, fontFamily: "Georgia, serif", marginBottom: 10 }}>{ev.name}</div>
-            {(ev.items || []).map((l) => (
-              <div key={l.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-                <input placeholder="Item (e.g. Welcome Drink)" value={l.name} onChange={(e) => updateMenuItem(ev.id, l.id, "name", e.target.value)} style={{ flex: 1, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 8px", fontSize: 12 }} />
-                <input type="number" placeholder="Qty" value={l.quantity} onChange={(e) => updateMenuItem(ev.id, l.id, "quantity", e.target.value)} style={{ width: 60, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 8px", fontSize: 12 }} />
-                <input type="number" placeholder="Price/person" value={l.pricePerPerson} onChange={(e) => updateMenuItem(ev.id, l.id, "pricePerPerson", e.target.value)} style={{ width: 80, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 8px", fontSize: 12 }} />
-                <span style={{ fontSize: 11.5, fontWeight: 700, width: 65, textAlign: "right" }}>{currency((Number(l.quantity) || 0) * (Number(l.pricePerPerson) || 0))}</span>
-                <button onClick={() => removeMenuItem(ev.id, l.id)} style={{ background: "none", border: "none", color: STONE, cursor: "pointer" }}><Trash2 size={13} /></button>
-              </div>
-            ))}
-            <button onClick={() => addMenuItem(ev.id)} style={{ display: "flex", alignItems: "center", gap: 5, background: "#FBFAF6", border: `1px solid ${LINE}`, borderRadius: 7, padding: "5px 10px", fontSize: 10.5, fontWeight: 600, color: STONE, cursor: "pointer", marginTop: 4, marginBottom: 10 }}>
-              <Plus size={11} /> Add Item
-            </button>
-            <div style={{ display: "flex", gap: 16, fontSize: 11.5, borderTop: `1px solid ${LINE}`, paddingTop: 8, flexWrap: "wrap" }}>
-              <span style={{ color: STONE }}>Subtotal: <strong style={{ color: INK }}>{currency(subtotal)}</strong></span>
-              <span style={{ color: STONE, display: "flex", alignItems: "center", gap: 4 }}>Tax %: <input type="number" value={ev.taxPct} onChange={(e) => updateEvent(ev.id, "taxPct", e.target.value)} style={{ width: 45, border: `1px solid ${LINE}`, borderRadius: 5, padding: "2px 5px" }} /></span>
-              <span style={{ color: STONE, display: "flex", alignItems: "center", gap: 4 }}>Service %: <input type="number" value={ev.servicePct} onChange={(e) => updateEvent(ev.id, "servicePct", e.target.value)} style={{ width: 45, border: `1px solid ${LINE}`, borderRadius: 5, padding: "2px 5px" }} /></span>
-              <span style={{ color: SAGE, fontWeight: 700 }}>Final: {currency(final)}</span>
-            </div>
-          </div>
-        );
-      })}
+      {events.map((ev) => (
+        <EventLineItemsSection key={ev.id} name={ev.name} event={ev} onChange={(newEv) => updateEvent(ev.id, newEv)} />
+      ))}
+      <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 8, marginTop: 4, borderTop: `2px solid ${LINE}` }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: INK, fontFamily: "Georgia, serif" }}>Catering Grand Total: <span style={{ color: GOLD }}>{currency(grandTotal)}</span></span>
+      </div>
     </div>
   );
 }
 
 function DecorSection({ item, onUpdate }) {
-  const decorItems = item.decorItems && item.decorItems.length > 0
-    ? item.decorItems
-    : DECOR_DEFAULT_ITEMS.map((name) => ({ id: `${Date.now()}-${name}`, name, cost: "" }));
+  const sections = item.decorSections && item.decorSections.length > 0
+    ? item.decorSections
+    : DECOR_SECTIONS.map((name) => ({ id: `${Date.now()}-${name}`, name, items: [], taxPct: 0, servicePct: 0, deliveryFee: 0, discount: 0 }));
 
   React.useEffect(() => {
-    if (!item.decorItems || item.decorItems.length === 0) onUpdate(item.id, "decorItems", decorItems);
+    if (!item.decorSections || item.decorSections.length === 0) onUpdate(item.id, "decorSections", sections);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function updateDecorItem(lineId, field, value) {
-    onUpdate(item.id, "decorItems", decorItems.map((l) => (l.id === lineId ? { ...l, [field]: value } : l)));
+  function updateSection(sectionId, newSection) {
+    onUpdate(item.id, "decorSections", sections.map((s) => (s.id === sectionId ? newSection : s)));
   }
-  function addDecorItem() {
-    onUpdate(item.id, "decorItems", [...decorItems, { id: Date.now(), name: "", cost: "" }]);
-  }
-  function removeDecorItem(lineId) {
-    onUpdate(item.id, "decorItems", decorItems.filter((l) => l.id !== lineId));
-  }
-  const total = decorItems.reduce((s, l) => s + (Number(l.cost) || 0), 0);
+  const grandTotal = sections.reduce((s, sec) => s + eventTotals(sec).total, 0);
 
   return (
     <div>
-      {decorItems.map((l) => (
-        <div key={l.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-          <input value={l.name} onChange={(e) => updateDecorItem(l.id, "name", e.target.value)} style={{ flex: 1, border: `1px solid ${LINE}`, borderRadius: 6, padding: "7px 9px", fontSize: 12.5 }} />
-          <input type="number" placeholder="Cost" value={l.cost} onChange={(e) => updateDecorItem(l.id, "cost", e.target.value)} style={{ width: 90, border: `1px solid ${LINE}`, borderRadius: 6, padding: "7px 9px", fontSize: 12.5, textAlign: "right" }} />
-          <button onClick={() => removeDecorItem(l.id)} style={{ background: "none", border: "none", color: STONE, cursor: "pointer" }}><Trash2 size={13} /></button>
-        </div>
+      {sections.map((sec) => (
+        <EventLineItemsSection key={sec.id} name={sec.name} event={sec} onChange={(newSec) => updateSection(sec.id, newSec)} />
       ))}
-      <button onClick={addDecorItem} style={{ display: "flex", alignItems: "center", gap: 5, background: "#FBFAF6", border: `1px solid ${LINE}`, borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, color: STONE, cursor: "pointer", marginTop: 6, marginBottom: 10 }}>
-        <Plus size={12} /> Add Decor Item
-      </button>
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: INK, borderTop: `1px solid ${LINE}`, paddingTop: 8 }}>Total: {currency(total)}</div>
+      <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 8, marginTop: 4, borderTop: `2px solid ${LINE}` }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: INK, fontFamily: "Georgia, serif" }}>Decor Grand Total: <span style={{ color: GOLD }}>{currency(grandTotal)}</span></span>
+      </div>
     </div>
   );
 }
 
-function GenericLineItemsSection({ item, onUpdate }) {
-  const lineItems = item.lineItems || [];
-  function addLine() { onUpdate(item.id, "lineItems", [...lineItems, { id: Date.now(), name: "", quantity: 1, unitPrice: "" }]); }
-  function updateLine(lineId, field, value) { onUpdate(item.id, "lineItems", lineItems.map((l) => (l.id === lineId ? { ...l, [field]: value } : l))); }
-  function removeLine(lineId) { onUpdate(item.id, "lineItems", lineItems.filter((l) => l.id !== lineId)); }
-  const subtotal = lineItems.reduce((s, l) => s + (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0), 0);
-
-  return (
-    <div>
-      {lineItems.map((l) => (
-        <div key={l.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-          <input placeholder="Item" value={l.name} onChange={(e) => updateLine(l.id, "name", e.target.value)} style={{ flex: 1, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 8px", fontSize: 12 }} />
-          <input type="number" placeholder="Qty" value={l.quantity} onChange={(e) => updateLine(l.id, "quantity", e.target.value)} style={{ width: 55, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 8px", fontSize: 12 }} />
-          <input type="number" placeholder="Price" value={l.unitPrice} onChange={(e) => updateLine(l.id, "unitPrice", e.target.value)} style={{ width: 75, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 8px", fontSize: 12 }} />
-          <span style={{ fontSize: 11.5, fontWeight: 700, width: 65, textAlign: "right" }}>{currency((Number(l.quantity) || 0) * (Number(l.unitPrice) || 0))}</span>
-          <button onClick={() => removeLine(l.id)} style={{ background: "none", border: "none", color: STONE, cursor: "pointer" }}><Trash2 size={13} /></button>
-        </div>
-      ))}
-      <button onClick={addLine} style={{ display: "flex", alignItems: "center", gap: 5, background: "#FBFAF6", border: `1px solid ${LINE}`, borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, color: STONE, cursor: "pointer", marginTop: 4, marginBottom: 10 }}>
-        <Plus size={12} /> Add Item
-      </button>
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: INK, borderTop: `1px solid ${LINE}`, paddingTop: 8 }}>Subtotal: {currency(subtotal)}</div>
-    </div>
-  );
+function GenericSection({ item, onUpdate }) {
+  const generic = item.genericSection || { name: "Line Items", items: [], taxPct: 0, servicePct: 0, deliveryFee: 0, discount: 0 };
+  function updateSection(newSection) { onUpdate(item.id, "genericSection", newSection); }
+  return <EventLineItemsSection name="Line Items" event={generic} onChange={updateSection} defaultOpen />;
 }
 
 function VendorDetailOverlay({ item, onUpdate, onClose }) {
   const status = statusOf(item);
   function addPayment() {
-    onUpdate(item.id, "payments", [...(item.payments || []), { id: Date.now(), name: "", amount: "", dueDate: "", paidDate: "", method: "", notes: "", status: "Pending" }]);
+    onUpdate(item.id, "payments", [...(item.payments || []), { id: Date.now(), amount: "", dueDate: "", paidDate: "", method: "", notes: "", status: "Upcoming" }]);
   }
   function updatePayment(pid, field, value) {
     onUpdate(item.id, "payments", item.payments.map((p) => (p.id === pid ? { ...p, [field]: value } : p)));
@@ -214,81 +244,76 @@ function VendorDetailOverlay({ item, onUpdate, onClose }) {
   function removePayment(pid) {
     onUpdate(item.id, "payments", item.payments.filter((p) => p.id !== pid));
   }
+  function statusMeta(label) { return PAYMENT_STATUSES.find((s) => s.label === label) || PAYMENT_STATUSES[0]; }
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#F6F4EF", zIndex: 80, overflowY: "auto" }}>
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 40px 80px" }}>
-        <button onClick={onClose} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: STONE, cursor: "pointer", fontSize: 12.5, fontWeight: 600, marginBottom: 20 }}>
+      <div style={{ maxWidth: 960, margin: "0 auto", padding: "28px 36px 80px" }}>
+        <button onClick={onClose} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: STONE, cursor: "pointer", fontSize: 12.5, fontWeight: 600, marginBottom: 16 }}>
           <ArrowLeft size={15} /> Back to Budget
         </button>
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
           <div>
-            <input placeholder="Category" value={item.category} onChange={(e) => onUpdate(item.id, "category", e.target.value)} style={{ fontSize: 24, fontWeight: 700, color: INK, fontFamily: "Georgia, serif", border: "none", background: "transparent", outline: "none", display: "block", marginBottom: 2 }} />
-            <input placeholder="Vendor name" value={item.vendor} onChange={(e) => onUpdate(item.id, "vendor", e.target.value)} style={{ fontSize: 13, color: STONE, border: "none", background: "transparent", outline: "none" }} />
+            <input placeholder="Category" value={item.category} onChange={(e) => onUpdate(item.id, "category", e.target.value)} style={{ fontSize: 22, fontWeight: 700, color: INK, fontFamily: "Georgia, serif", border: "none", background: "transparent", outline: "none", display: "block", marginBottom: 1 }} />
+            <input placeholder="Vendor name" value={item.vendor} onChange={(e) => onUpdate(item.id, "vendor", e.target.value)} style={{ fontSize: 12.5, color: STONE, border: "none", background: "transparent", outline: "none" }} />
           </div>
           {status.label === "Fully Paid" && (
-            <span style={{ display: "flex", alignItems: "center", gap: 6, background: SAGE, color: "#FFFFFF", fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 100 }}>
-              <Check size={13} /> Paid in Full
+            <span style={{ display: "flex", alignItems: "center", gap: 6, background: SAGE, color: "#FFFFFF", fontSize: 11.5, fontWeight: 700, padding: "5px 12px", borderRadius: 100 }}>
+              <Check size={12} /> Paid in Full
             </span>
           )}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
-          <div style={{ background: "#FFFFFF", border: `1px solid ${LINE}`, borderRadius: 14, padding: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: INK, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 14, fontFamily: "Georgia, serif" }}>Vendor Information</div>
-            {[
-              { key: "contactPerson", label: "Contact Person", icon: null },
-              { key: "phone", label: "Phone", icon: Phone },
-              { key: "email", label: "Email", icon: Mail },
-            ].map((f) => (
-              <div key={f.key} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: STONE, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 3 }}>{f.label}</div>
-                <input value={item[f.key]} onChange={(e) => onUpdate(item.id, f.key, e.target.value)} style={{ width: "100%", border: `1px solid ${LINE}`, borderRadius: 7, padding: "7px 9px", fontSize: 12.5, boxSizing: "border-box" }} />
-              </div>
-            ))}
-            <div>
-              <div style={{ fontSize: 10, color: STONE, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 3 }}>Contract / Notes</div>
-              <textarea value={item.contractNotes} onChange={(e) => onUpdate(item.id, "contractNotes", e.target.value)} rows={3} style={{ width: "100%", border: `1px solid ${LINE}`, borderRadius: 7, padding: "7px 9px", fontSize: 12.5, boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }} />
-            </div>
-          </div>
+        <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+          <SummaryCard label="Estimated Budget" value={item.initialBudget} editable onChange={(v) => onUpdate(item.id, "initialBudget", v)} />
+          <SummaryCard label="Actual Cost" value={item.contractAmount} editable onChange={(v) => onUpdate(item.id, "contractAmount", v)} />
+          <SummaryCard label="Discount" value={item.discount} editable onChange={(v) => onUpdate(item.id, "discount", v)} />
+          <SummaryCard label="Final Cost" value={currency(finalCostOf(item))} accent={GOLD} />
+          <SummaryCard label="Amount Paid" value={currency(totalPaidOf(item))} accent={SAGE} />
+          <SummaryCard label="Remaining" value={currency(remainingOf(item))} accent={remainingOf(item) === 0 ? SAGE : BORDEAUX} />
+        </div>
 
-          <div style={{ background: "#FFFFFF", border: `1px solid ${LINE}`, borderRadius: 14, padding: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: INK, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 14, fontFamily: "Georgia, serif" }}>Financial Summary</div>
+        <div style={{ background: "#FFFFFF", border: `1px solid ${LINE}`, borderRadius: 12, padding: "14px 16px", marginBottom: 18 }}>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
             {[
-              { key: "initialBudget", label: "Estimated Budget" },
-              { key: "contractAmount", label: "Actual Cost" },
-              { key: "discount", label: "Discount" },
+              { key: "contactPerson", label: "Contact" },
+              { key: "phone", label: "Phone" },
+              { key: "email", label: "Email" },
             ].map((f) => (
-              <div key={f.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, color: STONE }}>{f.label}</span>
-                <input type="number" value={item[f.key]} onChange={(e) => onUpdate(item.id, f.key, e.target.value)} style={{ width: 100, border: `1px solid ${LINE}`, borderRadius: 6, padding: "5px 8px", fontSize: 12.5, textAlign: "right" }} />
+              <div key={f.key} style={{ flex: "1 1 160px", minWidth: 140 }}>
+                <div style={{ fontSize: 9.5, color: STONE, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 3 }}>{f.label}</div>
+                <input value={item[f.key]} onChange={(e) => onUpdate(item.id, f.key, e.target.value)} style={{ width: "100%", border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 8px", fontSize: 12, boxSizing: "border-box" }} />
               </div>
             ))}
-            <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: `1px solid ${LINE}`, marginBottom: 6 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: INK }}>Final Cost</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: INK }}>{currency(finalCostOf(item))}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: STONE }}>Remaining Balance</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: remainingOf(item) === 0 ? SAGE : BORDEAUX }}>{currency(remainingOf(item))}</span>
-            </div>
           </div>
         </div>
 
-        <div style={{ background: "#FFFFFF", border: `1px solid ${LINE}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: INK, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 14, fontFamily: "Georgia, serif" }}>Payment History</div>
-          {(item.payments || []).map((p, i) => (
-            <div key={p.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 10.5, color: STONE, minWidth: 85 }}>{i === 0 ? "Deposit" : i === (item.payments.length - 1) ? "Final Payment" : `Payment ${i + 1}`}</span>
-              <input type="number" placeholder="Amount" value={p.amount} onChange={(e) => updatePayment(p.id, "amount", e.target.value)} style={{ width: 85, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 8px", fontSize: 11.5 }} />
-              <input type="date" value={p.paidDate || p.dueDate} onChange={(e) => updatePayment(p.id, "paidDate", e.target.value)} style={{ border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 8px", fontSize: 11 }} />
-              <select value={p.method} onChange={(e) => updatePayment(p.id, "method", e.target.value)} style={{ border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 6px", fontSize: 11 }}>
-                <option value="">Method</option><option>Card</option><option>Check</option><option>Zelle</option><option>Bank Transfer</option><option>Cash</option>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: INK, marginBottom: 10, fontFamily: "Georgia, serif" }}>
+            {isCatering(item.category) ? "Catering by Event" : isDecor(item.category) ? "Decor by Category" : "Line Items"}
+          </div>
+          {isCatering(item.category) ? (
+            <CateringSection item={item} onUpdate={onUpdate} />
+          ) : isDecor(item.category) ? (
+            <DecorSection item={item} onUpdate={onUpdate} />
+          ) : (
+            <GenericSection item={item} onUpdate={onUpdate} />
+          )}
+        </div>
+
+        <div style={{ background: "#FFFFFF", border: `1px solid ${LINE}`, borderRadius: 12, padding: "14px 16px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: INK, marginBottom: 10, fontFamily: "Georgia, serif" }}>Payment History</div>
+          {(item.payments || []).map((p) => (
+            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "80px 90px 55px 1fr 105px 30px", gap: 6, alignItems: "center", marginBottom: 6 }}>
+              <input type="number" placeholder="Amount" value={p.amount} onChange={(e) => updatePayment(p.id, "amount", e.target.value)} style={{ border: `1px solid ${LINE}`, borderRadius: 6, padding: "5px 7px", fontSize: 11.5, boxSizing: "border-box" }} />
+              <input type="date" value={p.paidDate || p.dueDate} onChange={(e) => updatePayment(p.id, "paidDate", e.target.value)} style={{ border: `1px solid ${LINE}`, borderRadius: 6, padding: "5px 6px", fontSize: 10.5, boxSizing: "border-box" }} />
+              <select value={p.method} onChange={(e) => updatePayment(p.id, "method", e.target.value)} style={{ border: `1px solid ${LINE}`, borderRadius: 6, padding: "5px 3px", fontSize: 10, boxSizing: "border-box" }}>
+                <option value="">-</option><option>Card</option><option>Check</option><option>Zelle</option><option>Transfer</option><option>Cash</option>
               </select>
-              <input placeholder="Notes" value={p.notes} onChange={(e) => updatePayment(p.id, "notes", e.target.value)} style={{ flex: 1, minWidth: 100, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 8px", fontSize: 11.5 }} />
-              <select value={p.status} onChange={(e) => updatePayment(p.id, "status", e.target.value)} style={{ border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 6px", fontSize: 11 }}>
-                <option>Pending</option><option>Paid</option>
+              <input placeholder="Notes" value={p.notes} onChange={(e) => updatePayment(p.id, "notes", e.target.value)} style={{ border: `1px solid ${LINE}`, borderRadius: 6, padding: "5px 7px", fontSize: 11, boxSizing: "border-box" }} />
+              <select value={p.status} onChange={(e) => updatePayment(p.id, "status", e.target.value)} style={{ border: `1px solid ${statusMeta(p.status).color}`, borderRadius: 6, padding: "5px 4px", fontSize: 10.5, color: statusMeta(p.status).color, fontWeight: 600, boxSizing: "border-box" }}>
+                {PAYMENT_STATUSES.map((s) => <option key={s.label}>{s.label}</option>)}
               </select>
               <button onClick={() => removePayment(p.id)} style={{ background: "none", border: "none", color: STONE, cursor: "pointer" }}><X size={13} /></button>
             </div>
@@ -296,19 +321,6 @@ function VendorDetailOverlay({ item, onUpdate, onClose }) {
           <button onClick={addPayment} style={{ display: "flex", alignItems: "center", gap: 5, background: "#FBFAF6", border: `1px solid ${LINE}`, borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, color: STONE, cursor: "pointer", marginTop: 4 }}>
             <Plus size={12} /> Add Payment
           </button>
-        </div>
-
-        <div style={{ background: "#FFFFFF", border: `1px solid ${LINE}`, borderRadius: 14, padding: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: INK, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 14, fontFamily: "Georgia, serif" }}>
-            {isCatering(item.category) ? "Menu by Event" : isDecor(item.category) ? "Decor Breakdown" : "Line Items"}
-          </div>
-          {isCatering(item.category) ? (
-            <CateringSection item={item} onUpdate={onUpdate} />
-          ) : isDecor(item.category) ? (
-            <DecorSection item={item} onUpdate={onUpdate} />
-          ) : (
-            <GenericLineItemsSection item={item} onUpdate={onUpdate} />
-          )}
         </div>
       </div>
     </div>
@@ -326,7 +338,11 @@ export default function Budget() {
     setVendors((v) => v.map((it) => (it.id === id ? { ...it, [field]: value } : it)));
   }
   function addVendor() {
-    setVendors((v) => [...v, { id: Date.now() + Math.random(), category: "", vendor: "", initialBudget: "", contractAmount: "", discount: "", payments: [], lineItems: [], cateringEvents: [], decorItems: [], contactPerson: "", phone: "", email: "", contractNotes: "" }]);
+    setVendors((v) => [...v, {
+      id: Date.now() + Math.random(), category: "", vendor: "", initialBudget: "", contractAmount: "", discount: "",
+      payments: [], cateringEvents: [], decorSections: [], genericSection: null,
+      contactPerson: "", phone: "", email: "", contractNotes: "",
+    }]);
   }
   function removeVendor(id) {
     setVendors((v) => v.filter((it) => it.id !== id));
@@ -338,7 +354,9 @@ export default function Budget() {
   const totalRemaining = useMemo(() => vendors.reduce((s, it) => s + remainingOf(it), 0), [vendors]);
 
   const pieData = useMemo(
-    () => vendors.filter((it) => finalCostOf(it) > 0).map((it) => ({ name: it.category || "Untitled", value: finalCostOf(it) })),
+    () => vendors
+      .map((it) => ({ name: it.category || "Untitled", value: finalCostOf(it) > 0 ? finalCostOf(it) : (Number(it.initialBudget) || 0) }))
+      .filter((d) => d.value > 0),
     [vendors]
   );
 
@@ -397,7 +415,7 @@ export default function Budget() {
                   {vendors.map((item) => {
                     const status = statusOf(item);
                     return (
-                      <tr key={item.id} onClick={() => setDetailItem(item)} style={{ cursor: "pointer", transition: "background 0.15s ease" }}
+                      <tr key={item.id} onClick={() => setDetailItem(item)} style={{ cursor: "pointer" }}
                         onMouseEnter={(e) => e.currentTarget.style.background = "#FBFAF6"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
                         <td style={{ padding: "14px 16px", borderBottom: `1px solid ${LINE}` }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: INK, fontFamily: "Georgia, serif" }}>{item.category || "Untitled"}</div>
@@ -426,7 +444,7 @@ export default function Budget() {
             <div style={{ background: "#FFFFFF", border: `1px solid ${LINE}`, borderRadius: 16, padding: 18, position: "sticky", top: 20 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: INK, marginBottom: 10, fontFamily: "Georgia, serif" }}>Budget Allocation</div>
               {pieData.length === 0 ? (
-                <div style={{ fontSize: 11, color: STONE, textAlign: "center", padding: "30px 0" }}>Add a vendor to see this populate.</div>
+                <div style={{ fontSize: 11, color: STONE, textAlign: "center", padding: "30px 0" }}>Add a vendor and an estimate to see this populate.</div>
               ) : (
                 <div style={{ width: "100%", height: 190 }}>
                   <ResponsiveContainer>
