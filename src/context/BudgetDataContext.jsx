@@ -8,6 +8,9 @@ export function makeItem(overrides = {}) {
   return {
     id: uid(), category: "", vendor: "", initialBudget: "", contractAmount: "",
     payments: [], whoIsPaying: "", bridePct: "50", groomPct: "50", notes: "", attachments: [],
+    lineItems: [], discount: "",
+    contactPerson: "", phone: "", email: "", contractNotes: "",
+    cateringEvents: [], decorItems: [],
     ...overrides,
   };
 }
@@ -28,6 +31,8 @@ export function useBudgetData() {
       categoryBudgets: [], setCategoryBudgets: noop,
       savingsLog: [], setSavingsLog: noop,
       timelineGeniusLink: "", setTimelineGeniusLink: noop,
+      guestCount: "", setGuestCount: noop,
+      targetBudget: "", setTargetBudget: noop,
       bookVendorToBudget: noop,
     };
   }
@@ -40,6 +45,8 @@ export function useBudgetData() {
   const setCategoryBudgets = (v) => updateWeddingField(id, "categoryBudgets", v);
   const setSavingsLog = (v) => updateWeddingField(id, "savingsLog", v);
   const setTimelineGeniusLink = (v) => updateWeddingField(id, "timelineGeniusLink", v);
+  const setGuestCount = (v) => updateWeddingField(id, "guestCount", v);
+  const setTargetBudget = (v) => updateWeddingField(id, "targetBudget", v);
 
   function bookVendorToBudget({ category, vendorName, contractAmount, notes, attachments }) {
     const item = makeItem({ category: category || "", vendor: vendorName || "", contractAmount: contractAmount || "", notes: notes || "", attachments: attachments || [] });
@@ -55,6 +62,8 @@ export function useBudgetData() {
     categoryBudgets: current.categoryBudgets || [], setCategoryBudgets,
     savingsLog: current.savingsLog || [], setSavingsLog,
     timelineGeniusLink: current.timelineGeniusLink || "", setTimelineGeniusLink,
+    guestCount: current.guestCount || "", setGuestCount,
+    targetBudget: current.targetBudget || "", setTargetBudget,
     bookVendorToBudget,
   };
 }
